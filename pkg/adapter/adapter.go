@@ -18,6 +18,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -53,6 +54,7 @@ type Adapter struct {
 	groups  map[string]*customSD
 	manager *discovery.Manager
 	output  string
+	path    string
 	name    string
 	logger  log.Logger
 }
@@ -113,6 +115,7 @@ func (a *Adapter) refreshTargetGroups(allTargetGroups map[string][]*targetgroup.
 
 // Writes JSON formatted targets to output file.
 func (a *Adapter) writeOutput() error {
+	level.Info(a.logger).Log("msg", "Inside writeOutput")
 	arr := mapToArray(a.groups)
 	b, _ := json.MarshalIndent(arr, "", "    ")
 
@@ -137,6 +140,39 @@ func (a *Adapter) writeOutput() error {
 	if err != nil {
 		return err
 	}
+
+	err = a.MoveFile(a.output, a.path+"/"+a.output)
+	if err != nil {
+		return err
+	}
+
+	level.Info(a.logger).Log("msg", "End of writeOutput")
+	return nil
+}
+
+func (a *Adapter) MoveFile(sourcePath, destPath string) error {
+	level.Info(a.logger).Log("msg", "Start of MoveFile", "sourcePath", sourcePath, "destPath", destPath)
+	sourceFile, err := os.Open(sourcePath)
+	if err != nil {
+		return fmt.Errorf("Couldn't open source file: %s", err)
+	}
+	outputFile, err := os.Create(destPath)
+	if err != nil {
+		sourceFile.Close()
+		return fmt.Errorf("Couldn't open dest file: %s", err)
+	}
+	defer outputFile.Close()
+	_, err = io.Copy(outputFile, sourceFile)
+	sourceFile.Close()
+	if err != nil {
+		return fmt.Errorf("Writing to output file failed: %s", err)
+	}
+	// The copy was successful, so now delete the original file
+	err = os.Remove(sourcePath)
+	if err != nil {
+		return fmt.Errorf("Failed removing original file: %s", err)
+	}
+	level.Info(a.logger).Log("msg", "End of MoveFile")
 	return nil
 }
 
@@ -164,13 +200,14 @@ func (a *Adapter) Run() {
 }
 
 // NewAdapter creates a new instance of Adapter.
-func NewAdapter(ctx context.Context, file string, name string, d discovery.Discoverer, logger log.Logger) *Adapter {
+func NewAdapter(ctx context.Context, file string, path string, name string, d discovery.Discoverer, logger log.Logger) *Adapter {
 	return &Adapter{
 		ctx:     ctx,
 		disc:    d,
 		groups:  make(map[string]*customSD),
 		manager: discovery.NewManager(ctx, logger),
 		output:  file,
+		path:    path,
 		name:    name,
 		logger:  logger,
 	}
