@@ -20,11 +20,13 @@ var (
 	lblCloudMapPrefix = model.MetaLabelPrefix + "cloudmap_"
 	lblNamespaceName  = model.LabelName(lblCloudMapPrefix + "namespace_name")
 	lblServiceName    = model.LabelName(lblCloudMapPrefix + "service_name")
+	lblMetricsName    = model.LabelName("__metrics_path__")
 )
 
 type targetSourceSpec struct {
 	namespace string
 	service   string
+	metricsp  string
 }
 
 func (spec *targetSourceSpec) String() string {
@@ -230,6 +232,12 @@ func (d *discovery) processServiceInstances(tgSourceSpec targetSourceSpec, dio *
 			model.AddressLabel: model.LabelValue(ipAddr),
 		}
 		tg.Targets = append(tg.Targets, labels)
+
+		metricsPath := aws.StringValue(inst.Attributes["METRICS_PATH"])
+		level.Info(d.logger).Log("metrics-path", metricsPath)
+		if metricsPath != "" {
+			tg.Labels[lblMetricsName] = model.LabelValue(metricsPath)
+		}
 	}
 	return tg
 }
