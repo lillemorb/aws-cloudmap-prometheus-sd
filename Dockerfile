@@ -17,5 +17,5 @@ RUN yum install -y ca-certificates
 COPY --from=builder /go/src/github.com/awslabs/aws-cloudmap-prometheus-sd/bin/aws-cloudmap-prometheus-sd /bin/aws-cloudmap-prometheus-sd
 RUN chmod 777 /bin/aws-cloudmap-prometheus-sd && chown nobody:nobody /bin/aws-cloudmap-prometheus-sd
 
-USER nobody
+USER root
 ENTRYPOINT ["/bin/aws-cloudmap-prometheus-sd"]
