@@ -197,10 +197,31 @@ func (d *discovery) processService(ctx context.Context, cloudmap *servicediscove
 		return nil
 	}
 
-	return d.processServiceInstances(tgSourceSpec, dio)
+	// Additional code to list tags for a resource.
+	serviceArn := aws.StringValue(s.Arn) // Assuming s.Arn holds the ARN of the service.
+	tagsInput := &servicediscovery.ListTagsForResourceInput{
+		ResourceARN: aws.String(serviceArn),
+	}
+
+	tagsOutput, err := cloudmap.ListTagsForResourceWithContext(ctx, tagsInput)
+	if err != nil {
+		level.Error(d.logger).Log("msg", "Error calling ListTagsForResource",
+			"service", s.Name, "namespace", ns.Name, "arn", serviceArn)
+
+		d.failedSources[tgSourceSpec] = true
+		return nil
+	}
+
+	tagsMap := make(map[string]string)
+	for _, tag := range tagsOutput.Tags {
+		level.Info(d.logger).Log("msg", "Tag found", "key", *tag.Key, "value", *tag.Value)
+		tagsMap[*tag.Key] = *tag.Value
+	}
+
+	return d.processServiceInstances(tgSourceSpec, dio, tagsMap)
 }
 
-func (d *discovery) processServiceInstances(tgSourceSpec targetSourceSpec, dio *servicediscovery.DiscoverInstancesOutput) *targetgroup.Group {
+func (d *discovery) processServiceInstances(tgSourceSpec targetSourceSpec, dio *servicediscovery.DiscoverInstancesOutput, tags map[string]string) *targetgroup.Group {
 	d.newSources[tgSourceSpec] = true
 	tg := &targetgroup.Group{
 		Source: tgSourceSpec.String(),
@@ -210,6 +231,16 @@ func (d *discovery) processServiceInstances(tgSourceSpec targetSourceSpec, dio *
 		},
 		Targets: make([]model.LabelSet, 0, len(dio.Instances)),
 	}
+
+	// Add tags to Labels
+	for key, value := range tags {
+		if key == "METRICS_PATH" {
+			tg.Labels[lblMetricsName] = model.LabelValue(value)
+		} else {
+			tg.Labels[model.LabelName(key)] = model.LabelValue(value)
+		}
+	}
+
 	for _, inst := range dio.Instances {
 		instanceID := aws.StringValue(inst.InstanceId)
 		ipv4 := aws.StringValue(inst.Attributes["AWS_INSTANCE_IPV4"])
@@ -233,11 +264,13 @@ func (d *discovery) processServiceInstances(tgSourceSpec targetSourceSpec, dio *
 		}
 		tg.Targets = append(tg.Targets, labels)
 
-		metricsPath := aws.StringValue(inst.Attributes["METRICS_PATH"])
-		level.Info(d.logger).Log("metrics-path", metricsPath)
-		if metricsPath != "" {
-			tg.Labels[lblMetricsName] = model.LabelValue(metricsPath)
-		}
+		/*
+			metricsPath := aws.StringValue(inst.Attributes["METRICS_PATH"])
+			level.Info(d.logger).Log("metrics-path", metricsPath)
+			if metricsPath != "" {
+				tg.Labels[lblMetricsName] = model.LabelValue(metricsPath)
+			}
+		*/
 	}
 	return tg
 }
