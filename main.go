@@ -37,9 +37,14 @@ func main() {
 
 	ctx := context.Background()
 
+	var cloudmapNamespace *string = nil
+	if *cloudmapNamespaceFlag != "" {
+		cloudmapNamespace = cloudmapNamespaceFlag
+	}
+
 	cfg := discovery.SDConfig{
 		RefreshInterval:   *refreshIntervalFlag,
-		CloudmapNamespace: cloudmapNamespaceFlag,
+		CloudmapNamespace: cloudmapNamespace,
 	}
 	sess, err := session.NewSession()
 	if err != nil {
