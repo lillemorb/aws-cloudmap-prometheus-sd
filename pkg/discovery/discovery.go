@@ -234,6 +234,8 @@ func (d *discovery) processServiceInstances(tgSourceSpec targetSourceSpec, dio *
 
 	// Add tags to Labels
 	for key, value := range tags {
+		// TODO: clean up after it is decided how custom attributes will be set.
+		// METRICS_PATH will be overwritten if service instance contains custom attribute with that key.
 		if key == "METRICS_PATH" {
 			tg.Labels[lblMetricsName] = model.LabelValue(value)
 		} else {
@@ -264,13 +266,13 @@ func (d *discovery) processServiceInstances(tgSourceSpec targetSourceSpec, dio *
 		}
 		tg.Targets = append(tg.Targets, labels)
 
-		/*
-			metricsPath := aws.StringValue(inst.Attributes["METRICS_PATH"])
-			level.Info(d.logger).Log("metrics-path", metricsPath)
-			if metricsPath != "" {
-				tg.Labels[lblMetricsName] = model.LabelValue(metricsPath)
-			}
-		*/
+		// TODO: clean up after it is decided how custom attributes will be set.
+		// Will overwrite METRICS_PATH from service tags atm.
+		metricsPath := aws.StringValue(inst.Attributes["METRICS_PATH"])
+		level.Info(d.logger).Log("metrics-path", metricsPath)
+		if metricsPath != "" {
+			tg.Labels[lblMetricsName] = model.LabelValue(metricsPath)
+		}
 	}
 	return tg
 }
