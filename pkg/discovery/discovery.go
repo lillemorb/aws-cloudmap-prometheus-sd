@@ -21,6 +21,7 @@ var (
 	lblNamespaceName  = model.LabelName(lblCloudMapPrefix + "namespace_name")
 	lblServiceName    = model.LabelName(lblCloudMapPrefix + "service_name")
 	lblMetricsName    = model.LabelName("__metrics_path__")
+	lblSchemeName     = model.LabelName("__scheme__")
 )
 
 type targetSourceSpec struct {
@@ -214,7 +215,6 @@ func (d *discovery) processService(ctx context.Context, cloudmap *servicediscove
 
 	tagsMap := make(map[string]string)
 	for _, tag := range tagsOutput.Tags {
-		level.Info(d.logger).Log("msg", "Tag found", "key", *tag.Key, "value", *tag.Value)
 		tagsMap[*tag.Key] = *tag.Value
 	}
 
@@ -238,6 +238,8 @@ func (d *discovery) processServiceInstances(tgSourceSpec targetSourceSpec, dio *
 		// METRICS_PATH will be overwritten if service instance contains custom attribute with that key.
 		if key == "METRICS_PATH" {
 			tg.Labels[lblMetricsName] = model.LabelValue(value)
+		} else if key == "SCHEME" {
+			tg.Labels[lblSchemeName] = model.LabelValue(value)
 		} else {
 			tg.Labels[model.LabelName(key)] = model.LabelValue(value)
 		}
@@ -266,12 +268,27 @@ func (d *discovery) processServiceInstances(tgSourceSpec targetSourceSpec, dio *
 		}
 		tg.Targets = append(tg.Targets, labels)
 
-		// TODO: clean up after it is decided how custom attributes will be set.
-		// Will overwrite METRICS_PATH from service tags atm.
-		metricsPath := aws.StringValue(inst.Attributes["METRICS_PATH"])
-		level.Info(d.logger).Log("metrics-path", metricsPath)
-		if metricsPath != "" {
-			tg.Labels[lblMetricsName] = model.LabelValue(metricsPath)
+		// // TODO: clean up after it is decided how custom attributes will be set.
+		// // Will labels from service tags atm.
+		for k, v := range inst.Attributes {
+			if k != "" {
+				if k == "METRICS_PATH" {
+					metricsPath := aws.StringValue(v)
+					if metricsPath != "" {
+						tg.Labels[lblMetricsName] = model.LabelValue(metricsPath)
+					}
+				} else if k == "SCHEME" {
+					scheme := aws.StringValue(v)
+					if scheme != "" {
+						tg.Labels[lblSchemeName] = model.LabelValue(scheme)
+					}
+				} else {
+					// Generic handling for other attributes
+					if v != nil {
+						tg.Labels[model.LabelName(k)] = model.LabelValue(*v)
+					}
+				}
+			}
 		}
 	}
 	return tg
